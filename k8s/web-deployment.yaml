@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: looksmaxx-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: looksmaxx-web
+  template:
+    metadata:
+      labels:
+        app: looksmaxx-web
+    spec:
+      containers:
+        - name: looksmaxx-web
+          image: looksmaxx:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/looksmaxx
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: looksmaxx-web
+spec:
+  selector:
+    app: looksmaxx-web
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: LoadBalancer
