@@ -7,9 +7,20 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <div id="auth-container">
-            <h1>LooksMaxx</h1>
+    <nav>
+        <div class="logo">LooksMaxx</div>
+        <div class="auth-buttons">
+            <button id="authBtn">Login / Sign Up</button>
+            <div id="userMenu" class="hidden">
+                <button id="logoutBtn">Logout</button>
+                <button id="deleteAccountBtn">Delete Account</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="modal hidden" id="authModal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
             <div id="login-form" class="form-container">
                 <h2>Login</h2>
                 <form id="loginForm">
@@ -30,19 +41,20 @@
                 <p>Already have an account? <a href="#" id="showLogin">Login</a></p>
             </div>
         </div>
+    </div>
 
-        <div id="app-container" class="hidden">
-            <h2>Welcome to LooksMaxx</h2>
-            <button id="cameraBtn">Open Camera</button>
-            <button id="logoutBtn">Logout</button>
-            <button id="deleteAccountBtn">Delete Account</button>
-            
-            <div id="camera-container" class="hidden">
+    <main>
+        <div class="camera-section">
+            <div id="camera-container">
                 <video id="video" autoplay playsinline></video>
-                <button id="closeCamera">Close Camera</button>
+                <div class="camera-controls">
+                    <button id="cameraBtn">Start Camera</button>
+                    <button id="closeCamera" class="hidden">Stop Camera</button>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
+
     <script src="app.js"></script>
 </body>
 </html>

@@ -1,32 +1,54 @@
 const API_URL = 'http://localhost:8000';
 
 // DOM Elements
+const authBtn = document.getElementById('authBtn');
+const userMenu = document.getElementById('userMenu');
+const authModal = document.getElementById('authModal');
+const closeModal = document.querySelector('.close');
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const showSignupLink = document.getElementById('showSignup');
 const showLoginLink = document.getElementById('showLogin');
-const authContainer = document.getElementById('auth-container');
-const appContainer = document.getElementById('app-container');
 const logoutBtn = document.getElementById('logoutBtn');
 const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 const cameraBtn = document.getElementById('cameraBtn');
 const closeCamera = document.getElementById('closeCamera');
 const video = document.getElementById('video');
-const cameraContainer = document.getElementById('camera-container');
 
 // Auth state
 let token = localStorage.getItem('token');
-if (token) {
-    showApp();
-}
+updateAuthUI();
 
 // Event Listeners
-showSignupLink.addEventListener('click', () => {
+authBtn.addEventListener('click', () => {
+    if (token) {
+        userMenu.classList.toggle('hidden');
+    } else {
+        authModal.classList.remove('hidden');
+    }
+});
+
+closeModal.addEventListener('click', () => {
+    authModal.classList.add('hidden');
+});
+
+window.addEventListener('click', (e) => {
+    if (e.target === authModal) {
+        authModal.classList.add('hidden');
+    }
+    if (!e.target.matches('#authBtn') && !userMenu.classList.contains('hidden')) {
+        userMenu.classList.add('hidden');
+    }
+});
+
+showSignupLink.addEventListener('click', (e) => {
+    e.preventDefault();
     document.getElementById('login-form').classList.add('hidden');
     document.getElementById('signup-form').classList.remove('hidden');
 });
 
-showLoginLink.addEventListener('click', () => {
+showLoginLink.addEventListener('click', (e) => {
+    e.preventDefault();
     document.getElementById('signup-form').classList.add('hidden');
     document.getElementById('login-form').classList.remove('hidden');
 });
@@ -47,8 +69,11 @@ loginForm.addEventListener('submit', async (e) => {
 
         if (response.ok) {
             const data = await response.json();
-            localStorage.setItem('token', data.access_token);
-            showApp();
+            token = data.access_token;
+            localStorage.setItem('token', token);
+            updateAuthUI();
+            authModal.classList.add('hidden');
+            loginForm.reset();
         } else {
             alert('Login failed. Please check your credentials.');
         }
@@ -74,6 +99,7 @@ signupForm.addEventListener('submit', async (e) => {
 
         if (response.ok) {
             alert('Account created successfully! Please log in.');
+            signupForm.reset();
             showLoginLink.click();
         } else {
             alert('Signup failed. Please try again.');
@@ -86,7 +112,9 @@ signupForm.addEventListener('submit', async (e) => {
 
 logoutBtn.addEventListener('click', () => {
     localStorage.removeItem('token');
-    showAuth();
+    token = null;
+    updateAuthUI();
+    userMenu.classList.add('hidden');
 });
 
 deleteAccountBtn.addEventListener('click', async () => {
@@ -101,8 +129,10 @@ deleteAccountBtn.addEventListener('click', async () => {
 
             if (response.ok) {
                 localStorage.removeItem('token');
+                token = null;
+                updateAuthUI();
+                userMenu.classList.add('hidden');
                 alert('Account deleted successfully.');
-                showAuth();
             } else {
                 alert('Failed to delete account.');
             }
@@ -118,7 +148,8 @@ cameraBtn.addEventListener('click', async () => {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
-        cameraContainer.classList.remove('hidden');
+        cameraBtn.classList.add('hidden');
+        closeCamera.classList.remove('hidden');
     } catch (error) {
         console.error('Camera error:', error);
         alert('Error accessing camera. Please make sure you have granted camera permissions.');
@@ -130,16 +161,16 @@ closeCamera.addEventListener('click', () => {
     const tracks = stream.getTracks();
     tracks.forEach(track => track.stop());
     video.srcObject = null;
-    cameraContainer.classList.add('hidden');
+    closeCamera.classList.add('hidden');
+    cameraBtn.classList.remove('hidden');
 });
 
 // Helper functions
-function showAuth() {
-    authContainer.classList.remove('hidden');
-    appContainer.classList.add('hidden');
-}
-
-function showApp() {
-    authContainer.classList.add('hidden');
-    appContainer.classList.remove('hidden');
+function updateAuthUI() {
+    if (token) {
+        authBtn.textContent = 'Account';
+        userMenu.classList.add('hidden');
+    } else {
+        authBtn.textContent = 'Login / Sign Up';
+    }
 }
