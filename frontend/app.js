@@ -21,23 +21,33 @@ const faceLengthSpan = document.getElementById('faceLength');
 const faceWidthSpan = document.getElementById('faceWidth');
 
 let isModelLoaded = false;
+let faceDetectionInterval = null;
 
 // Load face-api.js models
-Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights'),
-    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights')
-]).then(() => {
-    isModelLoaded = true;
-    console.log('Face detection models loaded');
-}).catch(err => {
-    console.error('Error loading face detection models:', err);
-});
+async function loadFaceDetectionModels() {
+    try {
+        await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights')
+        ]);
+        isModelLoaded = true;
+        console.log('Face detection models loaded');
+        if (video.srcObject) {
+            startFaceDetection();
+        }
+    } catch (err) {
+        console.error('Error loading face detection models:', err);
+    }
+}
+
+// Start loading models
+loadFaceDetectionModels();
 
 // Auth state
 let token = localStorage.getItem('token');
 updateAuthUI();
 
-// Event Listeners
+// Event Listeners for auth
 authBtn.addEventListener('click', () => {
     if (token) {
         userMenu.classList.toggle('hidden');
@@ -71,6 +81,125 @@ showLoginLink.addEventListener('click', (e) => {
     document.getElementById('login-form').classList.remove('hidden');
 });
 
+// Camera functionality
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        });
+        video.srcObject = stream;
+        await video.play();
+        cameraBtn.classList.add('hidden');
+        closeCamera.classList.remove('hidden');
+        measureBtn.classList.remove('hidden');
+        
+        if (isModelLoaded) {
+            startFaceDetection();
+        }
+    } catch (error) {
+        console.error('Camera error:', error);
+        alert('Error accessing camera. Please make sure you have granted camera permissions.');
+    }
+}
+
+cameraBtn.addEventListener('click', startCamera);
+
+closeCamera.addEventListener('click', () => {
+    stopCamera();
+});
+
+function stopCamera() {
+    if (video.srcObject) {
+        const stream = video.srcObject;
+        const tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+    }
+    closeCamera.classList.add('hidden');
+    measureBtn.classList.add('hidden');
+    cameraBtn.classList.remove('hidden');
+    clearMeasurements();
+    stopFaceDetection();
+}
+
+// Face detection and measurement
+function startFaceDetection() {
+    if (!video.srcObject || !isModelLoaded) return;
+
+    const displaySize = { width: video.width, height: video.height };
+    faceapi.matchDimensions(overlay, displaySize);
+
+    faceDetectionInterval = setInterval(async () => {
+        if (!video.srcObject) return;
+
+        try {
+            const detections = await faceapi
+                .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks();
+
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            
+            // Clear previous drawings
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            // Draw face landmarks
+            faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
+
+            if (detections.length > 0) {
+                const landmarks = detections[0].landmarks;
+                const positions = landmarks.positions;
+
+                // Calculate face measurements
+                const faceLength = calculateDistance(
+                    positions[8], // chin
+                    positions[27] // nose bridge top
+                );
+
+                const faceWidth = calculateDistance(
+                    positions[2], // left cheek
+                    positions[14] // right cheek
+                );
+
+                // Calculate and display ratio
+                const ratio = faceLength / faceWidth;
+                
+                faceRatioSpan.textContent = ratio.toFixed(2);
+                faceLengthSpan.textContent = Math.round(faceLength);
+                faceWidthSpan.textContent = Math.round(faceWidth);
+            }
+        } catch (error) {
+            console.error('Face detection error:', error);
+        }
+    }, 100);
+}
+
+function stopFaceDetection() {
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+        faceDetectionInterval = null;
+    }
+}
+
+function calculateDistance(point1, point2) {
+    return Math.sqrt(
+        Math.pow(point2.x - point1.x, 2) + 
+        Math.pow(point2.y - point1.y, 2)
+    );
+}
+
+function clearMeasurements() {
+    faceRatioSpan.textContent = '-';
+    faceLengthSpan.textContent = '-';
+    faceWidthSpan.textContent = '-';
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+}
+
+// Auth related functions
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
@@ -161,104 +290,6 @@ deleteAccountBtn.addEventListener('click', async () => {
     }
 });
 
-// Camera functionality
-cameraBtn.addEventListener('click', async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        cameraBtn.classList.add('hidden');
-        closeCamera.classList.remove('hidden');
-        measureBtn.classList.remove('hidden');
-        
-        // Start face detection when camera is on
-        video.addEventListener('play', () => {
-            if (isModelLoaded) {
-                detectFace();
-            }
-        });
-    } catch (error) {
-        console.error('Camera error:', error);
-        alert('Error accessing camera. Please make sure you have granted camera permissions.');
-    }
-});
-
-closeCamera.addEventListener('click', () => {
-    const stream = video.srcObject;
-    const tracks = stream.getTracks();
-    tracks.forEach(track => track.stop());
-    video.srcObject = null;
-    closeCamera.classList.add('hidden');
-    measureBtn.classList.add('hidden');
-    cameraBtn.classList.remove('hidden');
-    clearMeasurements();
-});
-
-// Face detection and measurement
-async function detectFace() {
-    if (!video.srcObject) return;
-
-    const displaySize = { width: video.width, height: video.height };
-    faceapi.matchDimensions(overlay, displaySize);
-
-    setInterval(async () => {
-        if (!video.srcObject) return;
-
-        const detections = await faceapi
-            .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-            .withFaceLandmarks();
-
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
-        
-        // Clear previous drawings
-        const ctx = overlay.getContext('2d');
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-        // Draw face landmarks
-        faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
-
-        if (detections.length > 0) {
-            const landmarks = detections[0].landmarks;
-            const positions = landmarks.positions;
-
-            // Calculate face measurements
-            // Face length: distance from chin to forehead
-            const faceLength = calculateDistance(
-                positions[8], // chin
-                positions[27] // nose bridge top
-            );
-
-            // Face width: distance between cheekbones
-            const faceWidth = calculateDistance(
-                positions[2], // left cheek
-                positions[14] // right cheek
-            );
-
-            // Calculate and display ratio
-            const ratio = faceLength / faceWidth;
-            
-            faceRatioSpan.textContent = ratio.toFixed(2);
-            faceLengthSpan.textContent = Math.round(faceLength);
-            faceWidthSpan.textContent = Math.round(faceWidth);
-        }
-    }, 100);
-}
-
-function calculateDistance(point1, point2) {
-    return Math.sqrt(
-        Math.pow(point2.x - point1.x, 2) + 
-        Math.pow(point2.y - point1.y, 2)
-    );
-}
-
-function clearMeasurements() {
-    faceRatioSpan.textContent = '-';
-    faceLengthSpan.textContent = '-';
-    faceWidthSpan.textContent = '-';
-    const ctx = overlay.getContext('2d');
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-}
-
-// Helper functions
 function updateAuthUI() {
     if (token) {
         authBtn.textContent = 'Account';
