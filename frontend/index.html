@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LooksMaxx</title>
     <link rel="stylesheet" href="styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
 </head>
 <body>
     <nav>
@@ -47,9 +48,19 @@
         <div class="camera-section">
             <div id="camera-container">
                 <video id="video" autoplay playsinline></video>
+                <canvas id="overlay" class="overlay"></canvas>
+                <div class="measurements">
+                    <div class="measurement-box">
+                        <h3>Face Measurements</h3>
+                        <p>Length-Width Ratio: <span id="faceRatio">-</span></p>
+                        <p>Face Length: <span id="faceLength">-</span>px</p>
+                        <p>Face Width: <span id="faceWidth">-</span>px</p>
+                    </div>
+                </div>
                 <div class="camera-controls">
                     <button id="cameraBtn">Start Camera</button>
                     <button id="closeCamera" class="hidden">Stop Camera</button>
+                    <button id="measureBtn" class="hidden">Measure Face</button>
                 </div>
             </div>
         </div>

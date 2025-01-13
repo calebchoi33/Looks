@@ -13,7 +13,25 @@ const logoutBtn = document.getElementById('logoutBtn');
 const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 const cameraBtn = document.getElementById('cameraBtn');
 const closeCamera = document.getElementById('closeCamera');
+const measureBtn = document.getElementById('measureBtn');
 const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const faceRatioSpan = document.getElementById('faceRatio');
+const faceLengthSpan = document.getElementById('faceLength');
+const faceWidthSpan = document.getElementById('faceWidth');
+
+let isModelLoaded = false;
+
+// Load face-api.js models
+Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights'),
+    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights')
+]).then(() => {
+    isModelLoaded = true;
+    console.log('Face detection models loaded');
+}).catch(err => {
+    console.error('Error loading face detection models:', err);
+});
 
 // Auth state
 let token = localStorage.getItem('token');
@@ -150,6 +168,14 @@ cameraBtn.addEventListener('click', async () => {
         video.srcObject = stream;
         cameraBtn.classList.add('hidden');
         closeCamera.classList.remove('hidden');
+        measureBtn.classList.remove('hidden');
+        
+        // Start face detection when camera is on
+        video.addEventListener('play', () => {
+            if (isModelLoaded) {
+                detectFace();
+            }
+        });
     } catch (error) {
         console.error('Camera error:', error);
         alert('Error accessing camera. Please make sure you have granted camera permissions.');
@@ -162,8 +188,75 @@ closeCamera.addEventListener('click', () => {
     tracks.forEach(track => track.stop());
     video.srcObject = null;
     closeCamera.classList.add('hidden');
+    measureBtn.classList.add('hidden');
     cameraBtn.classList.remove('hidden');
+    clearMeasurements();
 });
+
+// Face detection and measurement
+async function detectFace() {
+    if (!video.srcObject) return;
+
+    const displaySize = { width: video.width, height: video.height };
+    faceapi.matchDimensions(overlay, displaySize);
+
+    setInterval(async () => {
+        if (!video.srcObject) return;
+
+        const detections = await faceapi
+            .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks();
+
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        
+        // Clear previous drawings
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        // Draw face landmarks
+        faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
+
+        if (detections.length > 0) {
+            const landmarks = detections[0].landmarks;
+            const positions = landmarks.positions;
+
+            // Calculate face measurements
+            // Face length: distance from chin to forehead
+            const faceLength = calculateDistance(
+                positions[8], // chin
+                positions[27] // nose bridge top
+            );
+
+            // Face width: distance between cheekbones
+            const faceWidth = calculateDistance(
+                positions[2], // left cheek
+                positions[14] // right cheek
+            );
+
+            // Calculate and display ratio
+            const ratio = faceLength / faceWidth;
+            
+            faceRatioSpan.textContent = ratio.toFixed(2);
+            faceLengthSpan.textContent = Math.round(faceLength);
+            faceWidthSpan.textContent = Math.round(faceWidth);
+        }
+    }, 100);
+}
+
+function calculateDistance(point1, point2) {
+    return Math.sqrt(
+        Math.pow(point2.x - point1.x, 2) + 
+        Math.pow(point2.y - point1.y, 2)
+    );
+}
+
+function clearMeasurements() {
+    faceRatioSpan.textContent = '-';
+    faceLengthSpan.textContent = '-';
+    faceWidthSpan.textContent = '-';
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+}
 
 // Helper functions
 function updateAuthUI() {
